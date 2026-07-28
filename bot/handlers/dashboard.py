@@ -113,6 +113,18 @@ async def on_support(message: Message) -> None:
     )
 
 
+@router.message(F.text == "🔧 لوحة التحكم")
+async def on_admin_panel_click(message: Message) -> None:
+    from .admin import is_admin, get_admin_keyboard
+    if not is_admin(message):
+        return
+        
+    await message.answer(
+        "🔧 <b>لوحة تحكم المسؤول</b>\n\nاختر أحد الخيارات:",
+        reply_markup=get_admin_keyboard(),
+    )
+
+
 # ── Cancel & Navigation ──────────────────────────────────────────
 
 @router.message(F.text == "❌ إلغاء")
@@ -121,7 +133,7 @@ async def on_cancel_or_back(message: Message, state: FSMContext) -> None:
     await state.clear()
     await message.answer(
         "🏠 القائمة الرئيسية",
-        reply_markup=get_main_keyboard(),
+        reply_markup=get_main_keyboard(message),
     )
 
 
@@ -130,9 +142,9 @@ async def on_cancel_or_back(message: Message, state: FSMContext) -> None:
 @router.message(StateFilter(None), F.text)
 async def on_unknown_text(message: Message) -> None:
     text = message.text or ""
-    if text in ["🔍 بحث برقم الجلوس", "👤 بحث بالاسم", "📞 الدعم", "ℹ️ حول", "❓ مساعدة"]:
+    if text in ["🔍 بحث برقم الجلوس", "👤 بحث بالاسم", "📞 الدعم", "🔧 لوحة التحكم", "ℹ️ حول", "❓ مساعدة"]:
         return
     await message.answer(
         "👤 يرجى اختيار أحد الخيارات من القائمة أدناه:",
-        reply_markup=get_main_keyboard(),
+        reply_markup=get_main_keyboard(message),
     )

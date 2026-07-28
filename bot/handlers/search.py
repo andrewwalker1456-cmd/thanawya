@@ -34,7 +34,7 @@ async def on_seat_input(message: Message, state: FSMContext) -> None:
     # Handle cancel
     if text in ["❌ إلغاء", "🔙 القائمة الرئيسية"]:
         await state.clear()
-        await message.answer("🏠 القائمة الرئيسية", reply_markup=get_main_keyboard())
+        await message.answer("🏠 القائمة الرئيسية", reply_markup=get_main_keyboard(message))
         return
 
     # Validate input
@@ -57,7 +57,7 @@ async def on_seat_input(message: Message, state: FSMContext) -> None:
     if engine is None:
         await message.answer(
             "⚠️ البيانات غير محملة حالياً. يرجى المحاولة لاحقاً.",
-            reply_markup=get_main_keyboard(),
+            reply_markup=get_main_keyboard(message),
         )
         await state.clear()
         return
@@ -70,7 +70,7 @@ async def on_seat_input(message: Message, state: FSMContext) -> None:
     if record is None:
         await message.answer(
             f"❌ لم يتم العثور على نتيجة لرقم الجلوس <code>{seat_number}</code>",
-            reply_markup=get_main_keyboard(),
+            reply_markup=get_main_keyboard(message),
         )
         await state.clear()
         return
@@ -90,7 +90,7 @@ async def on_name_input(message: Message, state: FSMContext) -> None:
     # Handle cancel
     if text in ["❌ إلغاء", "🔙 القائمة الرئيسية"]:
         await state.clear()
-        await message.answer("🏠 القائمة الرئيسية", reply_markup=get_main_keyboard())
+        await message.answer("🏠 القائمة الرئيسية", reply_markup=get_main_keyboard(message))
         return
 
     if len(text) < 3:
@@ -108,7 +108,7 @@ async def on_name_input(message: Message, state: FSMContext) -> None:
     if engine is None:
         await message.answer(
             "⚠️ البيانات غير محملة حالياً. يرجى المحاولة لاحقاً.",
-            reply_markup=get_main_keyboard(),
+            reply_markup=get_main_keyboard(message),
         )
         await state.clear()
         return
@@ -124,7 +124,7 @@ async def on_name_input(message: Message, state: FSMContext) -> None:
     if not results:
         await message.answer(
             f"❌ لم يتم العثور على نتائج للاسم <b>{text}</b>",
-            reply_markup=get_main_keyboard(),
+            reply_markup=get_main_keyboard(message),
         )
         await state.clear()
         return
@@ -172,7 +172,7 @@ async def on_name_selection(message: Message, state: FSMContext) -> None:
 
     if text in ["❌ إلغاء", "🔙 القائمة الرئيسية"]:
         await state.clear()
-        await message.answer("🏠 القائمة الرئيسية", reply_markup=get_main_keyboard())
+        await message.answer("🏠 القائمة الرئيسية", reply_markup=get_main_keyboard(message))
         return
 
     # Parse selection number
@@ -233,7 +233,7 @@ async def _send_result_pdf(message: Message, record, stats_service) -> None:
         await message.answer_document(
             document=document,
             caption=summary,
-            reply_markup=get_main_keyboard(),
+            reply_markup=get_main_keyboard(message),
         )
     except Exception as e:
         logger.error(f"Failed to send PDF document: {e}")
@@ -258,7 +258,7 @@ async def _send_result_text(message: Message, record) -> None:
         for k, v in extra.items():
             text += f"• {k}: {v}\n"
 
-    await message.answer(text, reply_markup=get_main_keyboard())
+    await message.answer(text, reply_markup=get_main_keyboard(message))
 
 
 def _get_case_emoji(case_desc: str) -> str:

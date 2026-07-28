@@ -187,7 +187,7 @@ async def main() -> None:
         await message.answer(
             "🎓 <b>نتيجة الثانوية العامة 2026</b>\n\n"
             "اختر من القائمة أدناه للبحث عن النتيجة:",
-            reply_markup=get_main_keyboard(),
+            reply_markup=get_main_keyboard(message),
         )
 
     # Graceful shutdown

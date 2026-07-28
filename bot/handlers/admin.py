@@ -27,10 +27,16 @@ logger = logging.getLogger(__name__)
 router = Router()
 
 
-def is_admin(message: Message) -> bool:
+from typing import Union
+
+def is_admin(event: Union[Message, CallbackQuery]) -> bool:
     config = get_config()
-    user_id = message.from_user.id if message.from_user else 0
+    user_id = event.from_user.id if event.from_user else 0
     return user_id in config.bot.admin_ids
+
+# Bind admin filters to all router handlers
+router.message.filter(is_admin)
+router.callback_query.filter(is_admin)
 
 
 def get_admin_keyboard() -> ReplyKeyboardMarkup:

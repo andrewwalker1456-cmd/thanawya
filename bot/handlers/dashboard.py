@@ -82,7 +82,7 @@ async def on_help(message: Message) -> None:
 
 
 @router.message(F.text == "📞 الدعم")
-async def on_support(message: Message, bot: Bot) -> None:
+async def on_support(message: Message) -> None:
     config = get_config()
     admin_id = config.bot.admin_ids[0] if config.bot.admin_ids else None
     
@@ -90,6 +90,7 @@ async def on_support(message: Message, bot: Bot) -> None:
         await message.answer("❌ الدعم الفني غير متوفر حالياً.")
         return
         
+    bot = message.bot
     # Try to resolve admin's username if available, fallback to tg://user link
     try:
         chat = await bot.get_chat(admin_id)

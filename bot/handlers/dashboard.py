@@ -91,26 +91,33 @@ async def on_support(message: Message) -> None:
         return
         
     bot = message.bot
-    # Try to resolve admin's username if available, fallback to tg://user link
+    username = None
     try:
         chat = await bot.get_chat(admin_id)
         if chat.username:
-            url = f"https://t.me/{chat.username}"
-        else:
-            url = f"tg://user?id={admin_id}"
+            username = chat.username
     except Exception:
-        url = f"tg://user?id={admin_id}"
+        pass
         
-    keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="💬 مراسلة الدعم الفني", url=url)]
-    ])
-    
-    await message.answer(
-        "📞 <b>الدعم الفني والمساعدة</b>\n\n"
-        "إذا كنت تواجه أي مشكلة أو لديك استفسار، يمكنك التواصل مع إدارة البوت مباشرة بالضغط على الزر أدناه:",
-        reply_markup=keyboard,
-        parse_mode="HTML"
-    )
+    if username:
+        url = f"https://t.me/{username}"
+        keyboard = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="💬 مراسلة الدعم الفني", url=url)]
+        ])
+        await message.answer(
+            "📞 <b>الدعم الفني والمساعدة</b>\n\n"
+            "إذا كنت تواجه أي مشكلة أو لديك استفسار، يمكنك التواصل مع إدارة البوت مباشرة بالضغط على الزر أدناه:",
+            reply_markup=keyboard,
+            parse_mode="HTML"
+        )
+    else:
+        # tg://user?id links are only clickable inside message text, not inline buttons
+        await message.answer(
+            "📞 <b>الدعم الفني والمساعدة</b>\n\n"
+            "إذا كنت تواجه أي مشكلة أو لديك استفسار، يمكنك التواصل مع إدارة البوت مباشرة بالضغط على الرابط أدناه:\n\n"
+            f"💬 <a href='tg://user?id={admin_id}'>مراسلة الدعم الفني (اضغط هنا)</a>",
+            parse_mode="HTML"
+        )
 
 
 @router.message(F.text == "🔧 لوحة التحكم")

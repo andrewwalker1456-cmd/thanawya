@@ -169,8 +169,8 @@ async def main() -> None:
         channel_username="@Thanaweya_Amma_Results",
         channel_url="https://t.me/Thanaweya_Amma_Results"
     )
-    dp.message.middleware(force_sub)
-    dp.callback_query.middleware(force_sub)
+    dp.message.outer_middleware(force_sub)
+    dp.callback_query.outer_middleware(force_sub)
 
     # Register handlers
     from .handlers import get_routers

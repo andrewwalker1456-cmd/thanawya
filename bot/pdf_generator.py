@@ -21,7 +21,7 @@ from reportlab.platypus import (
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
-from reportlab.lib.enums import TA_CENTER, TA_RIGHT
+from reportlab.lib.enums import TA_CENTER, TA_RIGHT, TA_LEFT
 
 from .models import StudentRecord
 
@@ -83,86 +83,277 @@ class PDFGenerator:
             buffer = io.BytesIO()
             doc = SimpleDocTemplate(
                 buffer, pagesize=A4,
-                rightMargin=2*cm, leftMargin=2*cm,
-                topMargin=2*cm, bottomMargin=2*cm,
+                rightMargin=1.5*cm, leftMargin=1.5*cm,
+                topMargin=1.5*cm, bottomMargin=1.5*cm,
             )
 
             styles = getSampleStyleSheet()
 
+            # Define modern premium colors
+            c_primary = colors.HexColor("#1E3A8A")   # Deep Royal Blue
+            c_slate_dark = colors.HexColor("#0F172A") # Slate-900
+            c_slate_gray = colors.HexColor("#475569") # Slate-600
+            c_slate_light = colors.HexColor("#94A3B8") # Slate-400
+            c_bg_light = colors.HexColor("#F8FAFC")    # Slate-50
+            c_border = colors.HexColor("#E2E8F0")      # Slate-200
+
             title_style = ParagraphStyle(
                 "ArabicTitle", parent=styles["Title"],
-                fontName=self._font_name_bold, fontSize=20,
-                alignment=TA_CENTER, spaceAfter=4*mm,
-                textColor=colors.HexColor("#1a5276"),
+                fontName=self._font_name_bold, fontSize=18,
+                alignment=TA_CENTER, spaceAfter=2*mm,
+                textColor=c_slate_dark,
             )
 
-            label_style = ParagraphStyle(
-                "ArabicLabel", parent=styles["Normal"],
-                fontName=self._font_name, fontSize=12,
-                alignment=TA_RIGHT, leading=8*mm,
-                textColor=colors.HexColor("#7f8c8d"),
+            subtitle_style = ParagraphStyle(
+                "ArabicSubTitle", parent=styles["Normal"],
+                fontName=self._font_name, fontSize=9,
+                alignment=TA_CENTER, spaceAfter=6*mm,
+                textColor=c_slate_gray,
             )
 
-            value_style = ParagraphStyle(
-                "ArabicValue", parent=styles["Normal"],
+            card_label_style = ParagraphStyle(
+                "CardLabel", parent=styles["Normal"],
+                fontName=self._font_name, fontSize=11,
+                alignment=TA_RIGHT, textColor=c_slate_gray,
+            )
+
+            card_value_style = ParagraphStyle(
+                "CardValue", parent=styles["Normal"],
+                fontName=self._font_name_bold, fontSize=11,
+                alignment=TA_RIGHT, textColor=c_slate_dark,
+            )
+
+            section_title_style = ParagraphStyle(
+                "SectionTitle", parent=styles["Heading2"],
                 fontName=self._font_name_bold, fontSize=13,
-                alignment=TA_RIGHT, leading=8*mm,
-                textColor=colors.HexColor("#2c3e50"),
+                alignment=TA_RIGHT, spaceBefore=6*mm, spaceAfter=3*mm,
+                textColor=c_primary,
+            )
+
+            th_label_style = ParagraphStyle(
+                "ThLabel", parent=styles["Normal"],
+                fontName=self._font_name_bold, fontSize=11,
+                alignment=TA_RIGHT, textColor=colors.white,
+            )
+
+            td_label_style = ParagraphStyle(
+                "TdLabel", parent=styles["Normal"],
+                fontName=self._font_name, fontSize=10,
+                alignment=TA_RIGHT, textColor=colors.HexColor("#334155"),
+            )
+
+            td_value_style = ParagraphStyle(
+                "TdValue", parent=styles["Normal"],
+                fontName=self._font_name_bold, fontSize=10,
+                alignment=TA_RIGHT, textColor=c_slate_dark,
             )
 
             footer_style = ParagraphStyle(
                 "Footer", parent=styles["Normal"],
                 fontName=self._font_name, fontSize=8,
                 alignment=TA_CENTER,
-                textColor=colors.HexColor("#aab7b8"),
+                textColor=c_slate_light,
             )
 
             elements = []
 
-            # Header — Arabic title only
-            elements.append(Paragraph(arabic("نتيجة الثانوية العامة"), title_style))
+            # 1. TOP BAR DECORATION
             elements.append(HRFlowable(
-                width="80%", thickness=1, color=colors.HexColor("#2980b9"),
-                spaceAfter=5*mm, spaceBefore=2*mm,
+                width="100%", thickness=4, color=c_primary,
+                spaceAfter=5*mm, spaceBefore=0,
             ))
 
-            # Data table
+            # 2. MINISTRY HEADER TEXT
+            header_right_style = ParagraphStyle(
+                "HeaderRight", parent=styles["Normal"],
+                fontName=self._font_name, fontSize=9,
+                alignment=TA_RIGHT, textColor=c_slate_gray,
+                leading=12,
+            )
+            header_left_style = ParagraphStyle(
+                "HeaderLeft", parent=styles["Normal"],
+                fontName=self._font_name, fontSize=9,
+                alignment=TA_LEFT, textColor=c_slate_gray,
+                leading=12,
+            )
+            
+            header_table_data = [
+                [
+                    Paragraph(arabic("جمهورية مصر العربية\nوزارة التربية والتعليم والتعليم الفني\nإدارة نظم المعلومات"), header_right_style),
+                    Paragraph(arabic("امتحان شهادة إتمام الدراسة\nالثانوية العامة المصرية\nالعام الدراسي: ٢٠٢٥ / ٢٠٢٦"), header_left_style)
+                ]
+            ]
+            header_table = Table(header_table_data, colWidths=[doc.width * 0.5, doc.width * 0.5])
+            header_table.setStyle(TableStyle([
+                ("VALIGN", (0,0), (-1,-1), "TOP"),
+                ("LEFTPADDING", (0,0), (-1,-1), 0),
+                ("RIGHTPADDING", (0,0), (-1,-1), 0),
+                ("BOTTOMPADDING", (0,0), (-1,-1), 2*mm),
+            ]))
+            elements.append(header_table)
+
+            # 3. TITLE
+            elements.append(Paragraph(arabic("إخطار رسمي بنتيجة الطالب"), title_style))
+            elements.append(Paragraph(arabic("امتحانات الدور الأول للثانوية العامة"), subtitle_style))
+
+            # 4. EXTRACT CORE AND DYNAMIC DATA
             data = record.to_dict()
-            fields = self._get_ordered_fields(data)
+            student_name = data.get("الاسم", "—")
+            seat_num = data.get("رقم الجلوس", "—")
+            grade = data.get("الدرجة", 0.0) or 0.0
+            status_desc = data.get("student_case_desc", "—")
+            if status_desc == "—" and "student_case" in data:
+                status_desc = CASE_DESCRIPTIONS.get(data["student_case"], str(data["student_case"]))
+            
+            percentage = (grade / 320.0) * 100 if isinstance(grade, (int, float)) else 0.0
+            
+            # Dynamic lookup for branch, school, administration
+            branch = "—"
+            for k in ["الشعبة", "الشعبه", "التخصص", "شعبة"]:
+                if k in data:
+                    branch = data[k]
+                    break
 
-            table_data = []
-            for label_ar, value in fields:
-                display_label = arabic(str(label_ar))
-                display_value = arabic(self._format_value(label_ar, value))
-                table_data.append([
-                    Paragraph(display_value, value_style),
-                    Paragraph(display_label, label_style),
-                ])
+            school = "—"
+            for k in ["المدرسة", "المدرسه", "اسم المدرسة", "اسم المدرسه"]:
+                if k in data:
+                    school = data[k]
+                    break
 
-            col_widths = [doc.width * 0.55, doc.width * 0.45]
-            table = Table(table_data, colWidths=col_widths)
-            table.setStyle(TableStyle([
-                ("ROWBACKGROUNDS", (0,0), (-1,-1), [
-                    colors.HexColor("#ffffff"), colors.HexColor("#f4f6f7"),
-                ]),
+            admin_dept = "—"
+            for k in ["الإدارة", "الادارة", "الاداره", "الإدارة التعليمية", "الادارة التعليمية"]:
+                if k in data:
+                    admin_dept = data[k]
+                    break
+
+            # Determine status badge text color
+            status_color = "#10B981"  # Emerald Green for Passed
+            if any(x in status_desc for x in ["راسب", "دور ثان", "غياب"]):
+                status_color = "#EF4444"  # Red for fail/warning
+
+            card_status_style = ParagraphStyle(
+                "CardStatus", parent=styles["Normal"],
+                fontName=self._font_name_bold, fontSize=11,
+                alignment=TA_RIGHT, textColor=colors.HexColor(status_color),
+            )
+
+            disp_name = arabic(str(student_name))
+            disp_school = arabic(str(school))
+            disp_seat = arabic(str(seat_num))
+            disp_branch = arabic(str(branch))
+            disp_admin = arabic(str(admin_dept))
+            disp_grade = arabic(f"{grade:.2f}")
+            disp_pct = arabic(f"{percentage:.2f}%")
+            disp_status = arabic(status_desc)
+
+            # 5. SUMMARY CARD
+            card_data = [
+                # Row 0: Name (spanned) & Label
+                [
+                    Paragraph(disp_name, card_value_style),
+                    Paragraph(arabic(""), card_label_style),
+                    Paragraph(arabic(""), card_label_style),
+                    Paragraph(arabic("اسم الطالب:"), card_label_style),
+                ],
+                # Row 1: School (spanned) & Label
+                [
+                    Paragraph(disp_school, card_value_style),
+                    Paragraph(arabic(""), card_label_style),
+                    Paragraph(arabic(""), card_label_style),
+                    Paragraph(arabic("المدرسة:"), card_label_style),
+                ],
+                # Row 2: Seat & Branch
+                [
+                    Paragraph(disp_seat, card_value_style),
+                    Paragraph(arabic("رقم الجلوس:"), card_label_style),
+                    Paragraph(disp_branch, card_value_style),
+                    Paragraph(arabic("الشعبة:"), card_label_style),
+                ],
+                # Row 3: Status & Admin Dept
+                [
+                    Paragraph(disp_status, card_status_style),
+                    Paragraph(arabic("حالة الطالب:"), card_label_style),
+                    Paragraph(disp_admin, card_value_style),
+                    Paragraph(arabic("الإدارة التعليمية:"), card_label_style),
+                ],
+                # Row 4: Grade & Percentage
+                [
+                    Paragraph(disp_grade, card_value_style),
+                    Paragraph(arabic("المجموع الكلي:"), card_label_style),
+                    Paragraph(disp_pct, card_value_style),
+                    Paragraph(arabic("النسبة المئوية:"), card_label_style),
+                ]
+            ]
+
+            card_width = doc.width
+            col_w = [card_width * 0.35, card_width * 0.15, card_width * 0.35, card_width * 0.15]
+            
+            card_table = Table(card_data, colWidths=col_w)
+            card_table.setStyle(TableStyle([
                 ("VALIGN", (0,0), (-1,-1), "MIDDLE"),
-                ("TOPPADDING", (0,0), (-1,-1), 4*mm),
-                ("BOTTOMPADDING", (0,0), (-1,-1), 4*mm),
+                ("TOPPADDING", (0,0), (-1,-1), 2.5*mm),
+                ("BOTTOMPADDING", (0,0), (-1,-1), 2.5*mm),
                 ("LEFTPADDING", (0,0), (-1,-1), 3*mm),
                 ("RIGHTPADDING", (0,0), (-1,-1), 3*mm),
-                ("GRID", (0,0), (-1,-1), 0.5, colors.HexColor("#d5dbdb")),
-                ("LINEBELOW", (0,-1), (-1,-1), 1.5, colors.HexColor("#2980b9")),
+                ("BACKGROUND", (0,0), (-1,-1), c_bg_light),
+                ("GRID", (0,0), (-1,-1), 1, c_border),
+                # Spans for Name and School
+                ("SPAN", (0,0), (2,0)),
+                ("SPAN", (0,1), (2,1)),
             ]))
-            elements.append(table)
+            elements.append(card_table)
 
-            # Footer
-            elements.append(Spacer(1, 8*mm))
+            # 6. DETAILED SUBJECT GRADES
+            skip_keys = {
+                "الاسم", "رقم الجلوس", "الدرجة", "student_case",
+                "student_case_desc", "c_flage", "النسبة المئوية",
+                "الشعبة", "الشعبه", "التخصص", "شعبة",
+                "المدرسة", "المدرسه", "اسم المدرسة", "اسم المدرسه",
+                "الإدارة", "الادارة", "الاداره", "الإدارة التعليمية", "الادارة التعليمية"
+            }
+            subject_fields = []
+            for key, value in data.items():
+                if key not in skip_keys and value is not None:
+                    subject_fields.append((str(key), value))
+
+            if subject_fields:
+                elements.append(Paragraph(arabic("بيان درجات المواد الدراسية تفصيلاً"), section_title_style))
+
+                table_data = [[
+                    Paragraph(arabic("الدرجة الحاصل عليها"), th_label_style),
+                    Paragraph(arabic("اسم المادة الدراسية"), th_label_style),
+                ]]
+
+                for label_ar, value in subject_fields:
+                    display_label = arabic(str(label_ar))
+                    display_value = arabic(self._format_value(label_ar, value))
+                    table_data.append([
+                        Paragraph(display_value, td_value_style),
+                        Paragraph(display_label, td_label_style),
+                    ])
+
+                col_widths = [doc.width * 0.45, doc.width * 0.55]
+                table = Table(table_data, colWidths=col_widths)
+                table.setStyle(TableStyle([
+                    ("BACKGROUND", (0,0), (-1,0), c_primary),
+                    ("VALIGN", (0,0), (-1,-1), "MIDDLE"),
+                    ("TOPPADDING", (0,0), (-1,-1), 2.5*mm),
+                    ("BOTTOMPADDING", (0,0), (-1,-1), 2.5*mm),
+                    ("LEFTPADDING", (0,0), (-1,-1), 3*mm),
+                    ("RIGHTPADDING", (0,0), (-1,-1), 3*mm),
+                    ("GRID", (0,0), (-1,-1), 0.5, c_border),
+                    ("ROWBACKGROUNDS", (0,1), (-1,-1), [colors.white, c_bg_light]),
+                ]))
+                elements.append(table)
+
+            # 7. FOOTER SECTION
+            elements.append(Spacer(1, 10*mm))
             elements.append(HRFlowable(
-                width="60%", thickness=0.5, color=colors.HexColor("#aab7b8"),
-                spaceAfter=3*mm,
+                width="80%", thickness=0.5, color=c_slate_light,
+                spaceAfter=4*mm,
             ))
             elements.append(Paragraph(
-                arabic("تم إنشاء هذا الملف تلقائياً — بوت نتيجة الثانوية"),
+                arabic("هذا المستند يعتبر إخطاراً رسمياً بالنتيجة ومستخرج تلقائياً من قاعدة بيانات وزارة التربية والتعليم"),
                 footer_style,
             ))
 
@@ -174,38 +365,6 @@ class PDFGenerator:
         except Exception as e:
             logger.error(f"PDF generation failed: {e}", exc_info=True)
             return None
-
-    def _get_ordered_fields(self, data: Dict[str, Any]) -> List[tuple]:
-        """Get display fields — includes core fields plus any extra subject scores."""
-        fields = []
-
-        if "الاسم" in data:
-            fields.append(("الاسم", data["الاسم"]))
-        if "رقم الجلوس" in data:
-            fields.append(("رقم الجلوس", data["رقم الجلوس"]))
-        if "الدرجة" in data:
-            grade = data["الدرجة"]
-            fields.append(("الدرجة", grade))
-            if isinstance(grade, (int, float)):
-                percentage = (grade / 320.0) * 100
-                fields.append(("النسبة المئوية", f"{percentage:.2f}%"))
-        if "student_case_desc" in data:
-            fields.append(("الحالة", data["student_case_desc"]))
-        elif "student_case" in data:
-            case_val = data["student_case"]
-            desc = CASE_DESCRIPTIONS.get(case_val, str(case_val))
-            fields.append(("الحالة", desc))
-
-        # Add extra fields (subject scores, etc.)
-        skip_keys = {
-            "الاسم", "رقم الجلوس", "الدرجة", "student_case",
-            "student_case_desc", "c_flage",
-        }
-        for key, value in data.items():
-            if key not in skip_keys and value is not None:
-                fields.append((str(key), value))
-
-        return fields
 
     def _format_value(self, label: str, value: Any) -> str:
         if isinstance(value, float):

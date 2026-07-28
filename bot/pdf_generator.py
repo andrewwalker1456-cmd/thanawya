@@ -184,7 +184,11 @@ class PDFGenerator:
         if "رقم الجلوس" in data:
             fields.append(("رقم الجلوس", data["رقم الجلوس"]))
         if "الدرجة" in data:
-            fields.append(("الدرجة", data["الدرجة"]))
+            grade = data["الدرجة"]
+            fields.append(("الدرجة", grade))
+            if isinstance(grade, (int, float)):
+                percentage = (grade / 320.0) * 100
+                fields.append(("النسبة المئوية", f"{percentage:.2f}%"))
         if "student_case_desc" in data:
             fields.append(("الحالة", data["student_case_desc"]))
         elif "student_case" in data:
@@ -204,6 +208,8 @@ class PDFGenerator:
         return fields
 
     def _format_value(self, label: str, value: Any) -> str:
+        if label == "الدرجة" and isinstance(value, (int, float)):
+            return f"{value:.2f} / 320"
         if isinstance(value, float):
             return f"{value:.2f}"
         if value is None:

@@ -219,11 +219,13 @@ async def _send_result_pdf(message: Message, record, stats_service) -> None:
 
     # Summary message (HTML)
     case_emoji = _get_case_emoji(record.student_case_desc)
+    grade = getattr(record, 'grade', 0.0) or 0.0
+    percentage = (grade / 320.0) * 100
     summary = (
         f"✅ <b>تم العثور على النتيجة</b>\n\n"
         f"👤 الاسم: {record.name}\n"
         f"🔢 رقم الجلوس: <code>{record.seat_number}</code>\n"
-        f"📊 الدرجة: <b>{record.grade:.2f}</b>\n"
+        f"📊 الدرجة: <b>{grade:.2f} / 320</b> (<b>{percentage:.2f}%</b>)\n"
         f"{case_emoji} الحالة: <b>{record.student_case_desc}</b>\n\n"
         f"📄 تم إرفاق ملف PDF بالنتيجة التفصيلية"
     )
@@ -243,11 +245,13 @@ async def _send_result_pdf(message: Message, record, stats_service) -> None:
 async def _send_result_text(message: Message, record) -> None:
     """Fallback: send result as text if PDF fails."""
     case_emoji = _get_case_emoji(record.student_case_desc)
+    grade = getattr(record, 'grade', 0.0) or 0.0
+    percentage = (grade / 320.0) * 100
     text = (
         f"✅ <b>النتيجة</b>\n\n"
         f"👤 الاسم: {record.name}\n"
         f"🔢 رقم الجلوس: <code>{record.seat_number}</code>\n"
-        f"📊 الدرجة: <b>{record.grade:.2f}</b>\n"
+        f"📊 الدرجة: <b>{grade:.2f} / 320</b> (<b>{percentage:.2f}%</b>)\n"
         f"{case_emoji} الحالة: <b>{record.student_case_desc}</b>\n"
         f"🏷 c_flage: {record.c_flag}"
     )

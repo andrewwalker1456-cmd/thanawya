@@ -36,8 +36,17 @@ class ForceSubMiddleware(BaseMiddleware):
              return await handler(event, data)
 
         # Register/update user
-        from ..services.user_service import register_user, set_subscription_status
+        from ..services.user_service import register_user, set_subscription_status, is_user_banned
         register_user(user_id=user.id, username=user.username, first_name=user.first_name, last_name=user.last_name)
+
+        # Check if user is banned
+        if is_user_banned(user.id):
+            ban_text = "🚫 <b>تم حظر حسابك من استخدام هذا البوت.</b>\n\nيرجى التواصل مع الإدارة إذا كنت تعتقد أن هذا خطأ."
+            if isinstance(event, Message):
+                await event.answer(ban_text, parse_mode="HTML")
+            elif isinstance(event, CallbackQuery):
+                await event.answer(ban_text.replace("<b>", "").replace("</b>", ""), show_alert=True)
+            return  # Drop the update and block access
 
         try:
             member = await bot.get_chat_member(chat_id=self.channel_username, user_id=user.id)

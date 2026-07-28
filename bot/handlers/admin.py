@@ -10,15 +10,17 @@ import asyncio
 from pathlib import Path
 
 from aiogram import Router, F
+from aiogram.filters import StateFilter
 from aiogram.types import (
     Message, ReplyKeyboardMarkup, KeyboardButton, Document,
+    InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery, BufferedInputFile
 )
 from aiogram.fsm.context import FSMContext
 
 from ..app_state import (
     get_config, get_search_engine, get_importer, get_stats_service,
 )
-from .shared import AdminStates, get_main_keyboard
+from .shared import AdminStates, get_main_keyboard, get_cancel_keyboard
 
 logger = logging.getLogger(__name__)
 
@@ -31,6 +33,35 @@ def is_admin(message: Message) -> bool:
     return user_id in config.bot.admin_ids
 
 
+def get_admin_keyboard() -> ReplyKeyboardMarkup:
+    """Build the admin dashboard keyboard."""
+    return ReplyKeyboardMarkup(
+        keyboard=[
+            [
+                KeyboardButton(text="📤 رفع ملف جديد"),
+                KeyboardButton(text="📊 الإحصائيات"),
+            ],
+            [
+                KeyboardButton(text="📢 إرسال جماعي"),
+                KeyboardButton(text="👥 المشتركون"),
+            ],
+            [
+                KeyboardButton(text="🚫 إدارة الحظر"),
+                KeyboardButton(text="📥 تصدير المشتركين"),
+            ],
+            [
+                KeyboardButton(text="🔍 استعلام عن مستخدم"),
+                KeyboardButton(text="🩺 صحة النظام"),
+            ],
+            [
+                KeyboardButton(text="📜 سجل الأخطاء"),
+                KeyboardButton(text="🔙 القائمة الرئيسية"),
+            ],
+        ],
+        resize_keyboard=True,
+    )
+
+
 # ── Admin Entry Point ────────────────────────────────────────────
 
 @router.message(F.text == "/admin")
@@ -38,30 +69,9 @@ async def on_admin_entry(message: Message) -> None:
     if not is_admin(message):
         return
 
-    keyboard = ReplyKeyboardMarkup(
-        keyboard=[
-            [
-                KeyboardButton(text="📤 رفع ملف جديد"),
-                KeyboardButton(text="📊 الإحصائيات"),
-            ],
-            [
-                KeyboardButton(text="🩺 صحة النظام"),
-                KeyboardButton(text="📜 سجل الأخطاء"),
-            ],
-            [
-                KeyboardButton(text="👥 المشتركون"),
-                KeyboardButton(text="🔄 إعادة استيراد"),
-            ],
-            [
-                KeyboardButton(text="🔙 القائمة الرئيسية"),
-            ],
-        ],
-        resize_keyboard=True,
-    )
-
     await message.answer(
         "🔧 <b>لوحة تحكم المسؤول</b>\n\nاختر أحد الخيارات:",
-        reply_markup=keyboard,
+        reply_markup=get_admin_keyboard(),
     )
 
 
@@ -310,10 +320,10 @@ async def on_reimport(message: Message) -> None:
 
 # ── Cancel in admin states ───────────────────────────────────────
 
-@router.message(AdminStates.waiting_for_upload, F.text == "❌ إلغاء")
+@router.message(StateFilter(AdminStates), F.text == "❌ إلغاء")
 async def on_admin_cancel(message: Message, state: FSMContext) -> None:
     await state.clear()
-    await message.answer("🏠 القائمة الرئيسية", reply_markup=get_main_keyboard())
+    await message.answer("🏠 لوحة التحكم", reply_markup=get_admin_keyboard())
 
 
 @router.message(F.text == "👥 المشتركون")
@@ -345,6 +355,271 @@ async def on_subscribers_list(message: Message) -> None:
         text += f"{i}. <b>{name}</b>{username_str}\n   └ ID: <code>{uid}</code> | ⏱ {last_seen[:16]}\n"
         
     await message.answer(text, parse_mode="HTML")
+
+
+# ── Broadcast Message / Polls ────────────────────────────────────
+
+@router.message(F.text == "📢 إرسال جماعي")
+async def on_broadcast_prompt(message: Message, state: FSMContext) -> None:
+    if not is_admin(message):
+        return
+        
+    await state.set_state(AdminStates.waiting_for_broadcast)
+    await message.answer(
+        "📢 <b>أرسل الرسالة التي تريد بثها للمشتركين:</b>\n"
+        "يمكن أن تكون نصاً، صورة، فيديو، أو استفتاء (Poll).\n\n"
+        "<i>سيتم إرسالها كما هي لجميع المستخدمين المشتركين غير المحظورين.</i>",
+        reply_markup=get_cancel_keyboard(),
+        parse_mode="HTML"
+    )
+
+
+@router.message(AdminStates.waiting_for_broadcast)
+async def on_broadcast_execute(message: Message, state: FSMContext) -> None:
+    if not is_admin(message):
+        return
+        
+    await state.clear()
+    
+    from ..services.user_service import get_subscribed_users, set_subscription_status
+    users = get_subscribed_users()
+    
+    if not users:
+        await message.answer("❌ لا يوجد مستخدمون نشطون لإرسال الرسالة لهم.", reply_markup=get_admin_keyboard())
+        return
+        
+    progress_msg = await message.answer("⏳ جاري بدء الإرسال الجماعي...")
+    
+    success = 0
+    failed = 0
+    
+    for u in users:
+        uid = u[0]
+        try:
+            # Copy the message (preserves formatting, media, polls)
+            await message.copy_to(chat_id=uid)
+            success += 1
+            await asyncio.sleep(0.05)  # Telegram rate limit safety
+        except Exception as e:
+            logger.warning(f"Failed to send broadcast to {uid}: {e}")
+            failed += 1
+            # Auto-unsub user if they blocked the bot
+            if "blocked" in str(e).lower() or "deactivated" in str(e).lower() or "chat not found" in str(e).lower():
+                set_subscription_status(uid, False)
+                
+    try:
+        await progress_msg.delete()
+    except Exception:
+        pass
+    
+    await message.answer(
+        f"📢 <b>اكتمل الإرسال الجماعي!</b>\n\n"
+        f"✅ تم الإرسال بنجاح: <b>{success:,}</b> مستخدم\n"
+        f"❌ فشل الإرسال: <b>{failed:,}</b> مستخدم",
+        reply_markup=get_admin_keyboard(),
+        parse_mode="HTML"
+    )
+
+
+# ── Export Subscribers to Excel ──────────────────────────────────
+
+@router.message(F.text == "📥 تصدير المشتركين")
+async def on_export_subscribers(message: Message) -> None:
+    if not is_admin(message):
+        return
+
+    await message.answer("⏳ جاري استخراج البيانات وإنشاء ملف Excel...")
+    
+    from ..services.user_service import get_all_users
+    users = get_all_users()
+    
+    if not users:
+        await message.answer("❌ لا يوجد مستخدمون لتصديرهم.", reply_markup=get_admin_keyboard())
+        return
+        
+    try:
+        import openpyxl
+        from io import BytesIO
+        
+        # Create Excel
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = "المشتركون"
+        
+        # Headers
+        headers = ["User ID", "Username", "First Name", "Last Name", "Subscribed", "Banned", "Last Seen"]
+        ws.append(headers)
+        
+        for u in users:
+            ws.append(list(u))
+            
+        # Format columns width
+        for col in ws.columns:
+            max_len = max(len(str(cell.value or '')) for cell in col)
+            col_letter = openpyxl.utils.get_column_letter(col[0].column)
+            ws.column_dimensions[col_letter].width = max(max_len + 3, 10)
+            
+        # Save to memory stream
+        file_stream = BytesIO()
+        wb.save(file_stream)
+        file_stream.seek(0)
+        
+        input_file = BufferedInputFile(file_stream.read(), filename="subscribers.xlsx")
+        await message.answer_document(
+            document=input_file,
+            caption=f"✅ تم تصدير <b>{len(users)}</b> مستخدم بنجاح.",
+            reply_markup=get_admin_keyboard(),
+            parse_mode="HTML"
+        )
+    except Exception as e:
+        logger.error(f"Failed to export subscribers: {e}", exc_info=True)
+        await message.answer(f"❌ حدث خطأ أثناء التصدير: {e}", reply_markup=get_admin_keyboard())
+
+
+# ── Ban Management ───────────────────────────────────────────────
+
+@router.message(F.text == "🚫 إدارة الحظر")
+async def on_ban_management(message: Message) -> None:
+    if not is_admin(message):
+        return
+        
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [
+            InlineKeyboardButton(text="🚫 حظر مستخدم", callback_data="admin_ban"),
+            InlineKeyboardButton(text="🔓 إلغاء الحظر", callback_data="admin_unban")
+        ]
+    ])
+    
+    await message.answer(
+        "🚫 <b>لوحة إدارة الحظر</b>\n\nاختر العملية التي تريد القيام بها:", 
+        reply_markup=keyboard, 
+        parse_mode="HTML"
+    )
+
+
+@router.callback_query(F.data == "admin_ban")
+async def on_ban_click(callback: CallbackQuery, state: FSMContext) -> None:
+    await callback.answer()
+    await state.set_state(AdminStates.waiting_for_ban)
+    await callback.message.answer(
+        "🚫 <b>أدخل معرف المستخدم (User ID) أو يوزره (مثل @username) لحظره:</b>",
+        reply_markup=get_cancel_keyboard(),
+        parse_mode="HTML"
+    )
+
+
+@router.callback_query(F.data == "admin_unban")
+async def on_unban_click(callback: CallbackQuery, state: FSMContext) -> None:
+    await callback.answer()
+    await state.set_state(AdminStates.waiting_for_unban)
+    await callback.message.answer(
+        "🔓 <b>أدخل معرف المستخدم (User ID) أو يوزره (مثل @username) لإلغاء حظره:</b>",
+        reply_markup=get_cancel_keyboard(),
+        parse_mode="HTML"
+    )
+
+
+@router.message(AdminStates.waiting_for_ban, F.text)
+async def on_ban_execute(message: Message, state: FSMContext) -> None:
+    if not is_admin(message):
+        return
+        
+    query = message.text.strip()
+    from ..services.user_service import search_user, ban_user
+    
+    user = search_user(query)
+    if not user:
+        await message.answer(f"❌ لم يتم العثور على المستخدم '{query}' في قاعدة البيانات.")
+        return
+        
+    uid, uname, fname, lname, _, _, _ = user
+    ban_user(uid)
+    
+    name = f"{fname or ''} {lname or ''}".strip() or "بدون اسم"
+    await message.answer(
+        f"✅ <b>تم حظر المستخدم بنجاح!</b>\n\n"
+        f"👤 الاسم: <b>{name}</b>\n"
+        f"🆔 المعرف: <code>{uid}</code>\n"
+        f"🏷 اليوزر: @{uname or 'لا يوجد'}",
+        reply_markup=get_admin_keyboard(),
+        parse_mode="HTML"
+    )
+    await state.clear()
+
+
+@router.message(AdminStates.waiting_for_unban, F.text)
+async def on_unban_execute(message: Message, state: FSMContext) -> None:
+    if not is_admin(message):
+        return
+        
+    query = message.text.strip()
+    from ..services.user_service import search_user, unban_user
+    
+    user = search_user(query)
+    if not user:
+        await message.answer(f"❌ لم يتم العثور على المستخدم '{query}' في قاعدة البيانات.")
+        return
+        
+    uid, uname, fname, lname, _, _, _ = user
+    unban_user(uid)
+    
+    name = f"{fname or ''} {lname or ''}".strip() or "بدون اسم"
+    await message.answer(
+        f"✅ <b>تم إلغاء حظر المستخدم بنجاح!</b>\n\n"
+        f"👤 الاسم: <b>{name}</b>\n"
+        f"🆔 المعرف: <code>{uid}</code>\n"
+        f"🏷 اليوزر: @{uname or 'لا يوجد'}",
+        reply_markup=get_admin_keyboard(),
+        parse_mode="HTML"
+    )
+    await state.clear()
+
+
+# ── Search User ──────────────────────────────────────────────────
+
+@router.message(F.text == "🔍 استعلام عن مستخدم")
+async def on_search_user_prompt(message: Message, state: FSMContext) -> None:
+    if not is_admin(message):
+        return
+        
+    await state.set_state(AdminStates.waiting_for_search_user)
+    await message.answer(
+        "🔍 <b>أدخل معرف المستخدم (User ID) أو يوزره (@username) للبحث عنه:</b>",
+        reply_markup=get_cancel_keyboard(),
+        parse_mode="HTML"
+    )
+
+
+@router.message(AdminStates.waiting_for_search_user, F.text)
+async def on_search_user_execute(message: Message, state: FSMContext) -> None:
+    if not is_admin(message):
+        return
+        
+    query = message.text.strip()
+    from ..services.user_service import search_user
+    
+    user = search_user(query)
+    if not user:
+        await message.answer(f"❌ لم يتم العثور على المستخدم '{query}' في قاعدة البيانات.")
+        return
+        
+    uid, uname, fname, lname, sub, banned, last_seen = user
+    name = f"{fname or ''} {lname or ''}".strip() or "بدون اسم"
+    sub_status = "✅ مشترك" if sub else "❌ غير مشترك"
+    ban_status = "🚫 محظور" if banned else "🟢 نشط"
+    
+    text = (
+        f"🔍 <b>تفاصيل حساب المستخدم:</b>\n\n"
+        f"👤 الاسم: <b>{name}</b>\n"
+        f"🆔 معرف: <code>{uid}</code>\n"
+        f"🏷 يوزر: @{uname or 'لا يوجد'}\n"
+        f"📢 الاشتراك: <b>{sub_status}</b>\n"
+        f"🛡 الحالة: <b>{ban_status}</b>\n"
+        f"⏱ آخر تواجد: <code>{last_seen}</code>"
+    )
+    
+    await message.answer(text, reply_markup=get_admin_keyboard(), parse_mode="HTML")
+    await state.clear()
 
 
 # ── Shutdown Local Instance ──────────────────────────────────────

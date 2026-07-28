@@ -20,6 +20,10 @@ class AdminStates(StatesGroup):
     """FSM states for admin flows."""
     waiting_for_upload = State()
     waiting_for_confirmation = State()
+    waiting_for_broadcast = State()
+    waiting_for_ban = State()
+    waiting_for_unban = State()
+    waiting_for_search_user = State()
 
 
 # ── Keyboard Builders ────────────────────────────────────────────

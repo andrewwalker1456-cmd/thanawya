@@ -4,6 +4,9 @@ Admin panel: file upload, statistics, system management.
 """
 
 import logging
+import os
+import sys
+import asyncio
 from pathlib import Path
 
 from aiogram import Router, F
@@ -308,3 +311,22 @@ async def on_reimport(message: Message) -> None:
 async def on_admin_cancel(message: Message, state: FSMContext) -> None:
     await state.clear()
     await message.answer("🏠 القائمة الرئيسية", reply_markup=get_main_keyboard())
+
+
+# ── Shutdown Local Instance ──────────────────────────────────────
+
+@router.message(F.text == "/shutdown_local")
+async def on_shutdown_local(message: Message) -> None:
+    if not is_admin(message):
+        return
+        
+    # Render sets RENDER=true automatically
+    is_render = os.environ.get("RENDER") == "true"
+    
+    if not is_render:
+        await message.answer("🛑 <b>جاري إيقاف البوت المحلي (القديم)...</b>\nسيتم إغلاق هذه النسخة الآن.", parse_mode="HTML")
+        await asyncio.sleep(1)
+        logger.info("Shutdown requested via /shutdown_local command.")
+        sys.exit(0)
+    else:
+        await message.answer("ℹ️ <b>هذا البوت يعمل على Render (النسخة النشطة).</b>\nلم يتم إيقافه لأن البيئة سحابية.", parse_mode="HTML")

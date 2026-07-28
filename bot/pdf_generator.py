@@ -208,8 +208,6 @@ class PDFGenerator:
         return fields
 
     def _format_value(self, label: str, value: Any) -> str:
-        if label == "الدرجة" and isinstance(value, (int, float)):
-            return f"{value:.2f} / 320"
         if isinstance(value, float):
             return f"{value:.2f}"
         if value is None:

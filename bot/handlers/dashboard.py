@@ -5,11 +5,12 @@ Manages the main reply keyboard and user state routing.
 
 import logging
 
-from aiogram import Router, F
-from aiogram.types import Message
+from aiogram import Router, F, Bot
+from aiogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.filters import StateFilter
 from aiogram.fsm.context import FSMContext
 
+from ..app_state import get_config
 from .shared import (
     SearchStates, get_main_keyboard, get_cancel_keyboard,
 )
@@ -80,6 +81,37 @@ async def on_help(message: Message) -> None:
     )
 
 
+@router.message(F.text == "📞 الدعم")
+async def on_support(message: Message, bot: Bot) -> None:
+    config = get_config()
+    admin_id = config.bot.admin_ids[0] if config.bot.admin_ids else None
+    
+    if not admin_id:
+        await message.answer("❌ الدعم الفني غير متوفر حالياً.")
+        return
+        
+    # Try to resolve admin's username if available, fallback to tg://user link
+    try:
+        chat = await bot.get_chat(admin_id)
+        if chat.username:
+            url = f"https://t.me/{chat.username}"
+        else:
+            url = f"tg://user?id={admin_id}"
+    except Exception:
+        url = f"tg://user?id={admin_id}"
+        
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="💬 مراسلة الدعم الفني", url=url)]
+    ])
+    
+    await message.answer(
+        "📞 <b>الدعم الفني والمساعدة</b>\n\n"
+        "إذا كنت تواجه أي مشكلة أو لديك استفسار، يمكنك التواصل مع إدارة البوت مباشرة بالضغط على الزر أدناه:",
+        reply_markup=keyboard,
+        parse_mode="HTML"
+    )
+
+
 # ── Cancel & Navigation ──────────────────────────────────────────
 
 @router.message(F.text == "❌ إلغاء")
@@ -97,7 +129,7 @@ async def on_cancel_or_back(message: Message, state: FSMContext) -> None:
 @router.message(StateFilter(None), F.text)
 async def on_unknown_text(message: Message) -> None:
     text = message.text or ""
-    if text in ["🔍 بحث برقم الجلوس", "👤 بحث بالاسم", "ℹ️ حول", "❓ مساعدة"]:
+    if text in ["🔍 بحث برقم الجلوس", "👤 بحث بالاسم", "📞 الدعم", "ℹ️ حول", "❓ مساعدة"]:
         return
     await message.answer(
         "👤 يرجى اختيار أحد الخيارات من القائمة أدناه:",

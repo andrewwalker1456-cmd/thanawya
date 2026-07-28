@@ -37,6 +37,7 @@ def get_main_keyboard() -> ReplyKeyboardMarkup:
                 KeyboardButton(text="👤 بحث بالاسم"),
             ],
             [
+                KeyboardButton(text="📞 الدعم"),
                 KeyboardButton(text="ℹ️ حول"),
                 KeyboardButton(text="❓ مساعدة"),
             ],

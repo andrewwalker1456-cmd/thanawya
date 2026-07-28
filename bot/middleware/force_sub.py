@@ -49,6 +49,19 @@ class ForceSubMiddleware(BaseMiddleware):
                     await event.message.delete()
                 except Exception:
                     pass
+                
+                # Send the main menu
+                try:
+                    from ..handlers.shared import get_main_keyboard
+                    await bot.send_message(
+                        chat_id=user.id,
+                        text="🎓 <b>نتيجة الثانوية العامة 2026</b>\n\nاختر من القائمة أدناه للبحث عن النتيجة:",
+                        reply_markup=get_main_keyboard(),
+                        parse_mode="HTML"
+                    )
+                except Exception as e:
+                    logger.error(f"Failed to send main menu after sub check: {e}")
+                    
                 return  # Stop propagation since it's just a check button
                 
         except TelegramAPIError as e:

@@ -49,7 +49,10 @@ async def on_admin_entry(message: Message) -> None:
                 KeyboardButton(text="📜 سجل الأخطاء"),
             ],
             [
+                KeyboardButton(text="👥 المشتركون"),
                 KeyboardButton(text="🔄 إعادة استيراد"),
+            ],
+            [
                 KeyboardButton(text="🔙 القائمة الرئيسية"),
             ],
         ],
@@ -311,6 +314,37 @@ async def on_reimport(message: Message) -> None:
 async def on_admin_cancel(message: Message, state: FSMContext) -> None:
     await state.clear()
     await message.answer("🏠 القائمة الرئيسية", reply_markup=get_main_keyboard())
+
+
+@router.message(F.text == "👥 المشتركون")
+async def on_subscribers_list(message: Message) -> None:
+    if not is_admin(message):
+        return
+
+    from ..services.user_service import get_subscribed_users
+    users = get_subscribed_users()
+    
+    if not users:
+        await message.answer("👥 لا يوجد مستخدمون مشتركون حالياً.")
+        return
+        
+    total_count = len(users)
+    recent_users = users[:50]  # Limit to 50 for message size limits
+    
+    text = f"👥 <b>قائمة المشتركين النشطين</b>\n"
+    text += f"📊 إجمالي المشتركين: <b>{total_count:,}</b>\n"
+    if total_count > 50:
+        text += f"🔍 يعرض آخر 50 مشتركاً:\n\n"
+    else:
+        text += f"\n"
+        
+    for i, u in enumerate(recent_users, 1):
+        uid, uname, fname, lname, last_seen = u
+        name = f"{fname or ''} {lname or ''}".strip() or "مستخدم بدون اسم"
+        username_str = f" (@{uname})" if uname else ""
+        text += f"{i}. <b>{name}</b>{username_str}\n   └ ID: <code>{uid}</code> | ⏱ {last_seen[:16]}\n"
+        
+    await message.answer(text, parse_mode="HTML")
 
 
 # ── Shutdown Local Instance ──────────────────────────────────────

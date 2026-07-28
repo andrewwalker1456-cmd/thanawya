@@ -35,11 +35,19 @@ class ForceSubMiddleware(BaseMiddleware):
         if user.is_bot:
              return await handler(event, data)
 
+        # Register/update user
+        from ..services.user_service import register_user, set_subscription_status
+        register_user(user_id=user.id, username=user.username, first_name=user.first_name, last_name=user.last_name)
+
         try:
             member = await bot.get_chat_member(chat_id=self.channel_username, user_id=user.id)
             if member.status in ['left', 'kicked', 'restricted']:
+                set_subscription_status(user.id, False)
                 await self._prompt_join(event, bot)
                 return  # Drop the update
+            
+            # User is subscribed
+            set_subscription_status(user.id, True)
             
             # If it's a callback query specifically for checking sub, answer it
             if isinstance(event, CallbackQuery) and event.data == "check_sub":

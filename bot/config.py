@@ -100,6 +100,23 @@ def load_config(config_path = None) -> AppConfig:
         with open(config_path, "r", encoding="utf-8") as f:
             raw = yaml.safe_load(f) or {}
 
+    # Load .env file manually if it exists (for local running)
+    env_path = config_path.parent.parent / ".env"
+    if env_path.exists():
+        try:
+            with open(env_path, "r", encoding="utf-8") as f:
+                for line in f:
+                    line = line.strip()
+                    if not line or line.startswith("#"):
+                        continue
+                    if "=" in line:
+                        k, v = line.split("=", 1)
+                        k = k.strip()
+                        if k not in os.environ:
+                            os.environ[k] = v.strip()
+        except Exception:
+            pass
+
     def get(d: dict, key: str, default=None):
         return d.get(key, default) if d else default
 

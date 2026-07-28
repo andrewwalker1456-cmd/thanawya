@@ -1,0 +1,24 @@
+# ============================================================
+# Render Blueprint — Thanaweya Amma Bot
+# Deploy as a Docker-based web service
+# ============================================================
+
+services:
+  - type: web
+    name: thanaweya-bot
+    runtime: docker
+    plan: starter  # $7/mo — always on, 512MB RAM
+    healthCheckPath: /health
+    envVars:
+      - key: BOT_TOKEN
+        value: "8769493338:AAHDzZF0IOOsjvjGvPidezxoMDFBc2JjyBQ"
+      - key: ADMIN_IDS
+        value: "8929098955"
+      - key: SOURCE_FILE
+        value: data/students.db
+      - key: LOG_LEVEL
+        value: INFO
+      - key: PYTHONUNBUFFERED
+        value: "1"
+      - key: PORT
+        value: "8080"

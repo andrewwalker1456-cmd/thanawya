@@ -1,0 +1,37 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual Environment
+.env
+.venv
+venv/
+ENV/
+
+# Data and Secrets
+.env
+data/students.db
+data/cache/
+data/uploads/
+logs/
+
+# Optional: if you don't want to use Git LFS, uncomment the line below to ignore the 200MB .accdb file
+*.accdb

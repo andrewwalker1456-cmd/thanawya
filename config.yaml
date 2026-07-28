@@ -1,0 +1,39 @@
+# ============================================================
+# Thanaweya Amma Bot — Configuration
+# ============================================================
+
+bot:
+  token: ""  # Set via BOT_TOKEN environment variable
+  admin_ids: []  # Set via ADMIN_IDS env var (comma-separated Telegram user IDs)
+
+server:
+  host: "0.0.0.0"
+  port: 8080
+
+data:
+  upload_dir: "data/uploads"
+  cache_dir: "data/cache"
+  source_file: "data/students.db"  # SQLite DB converted from .accdb (set via SOURCE_FILE env var)
+
+search:
+  normalize_teh: false  # Convert ة -> ه during normalization
+  max_name_results: 10
+
+rate_limit:
+  max_requests_per_minute: 30
+  max_requests_per_hour: 200
+  burst: 5
+
+pdf:
+  font_path: "../fonts/NotoNaskhArabic.ttf"
+  fallback_font_path: "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
+  paper_size: "A4"
+
+logging:
+  level: "INFO"
+  file: "logs/bot.log"
+  max_size_mb: 50
+  backup_count: 5
+
+admin:
+  max_upload_size_mb: 100

@@ -1,0 +1,10 @@
+aiogram>=3.10
+polars>=1.0
+fastexcel>=0.7
+openpyxl>=3.1
+reportlab>=4.0
+pyyaml>=6.0
+aiofiles>=24.0
+psutil>=5.9
+arabic-reshaper>=3.0
+python-bidi>=0.6

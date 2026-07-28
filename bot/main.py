@@ -157,11 +157,20 @@ async def main() -> None:
 
     # Register middleware
     from .middleware.rate_limiter import RateLimiter
+    from .middleware.force_sub import ForceSubMiddleware
+    
     dp.message.middleware(RateLimiter(
         burst=config.rate_limit.burst,
         per_minute=config.rate_limit.max_requests_per_minute,
         per_hour=config.rate_limit.max_requests_per_hour,
     ))
+    
+    force_sub = ForceSubMiddleware(
+        channel_username="@Thanaweya_Amma_Results",
+        channel_url="https://t.me/Thanaweya_Amma_Results"
+    )
+    dp.message.middleware(force_sub)
+    dp.callback_query.middleware(force_sub)
 
     # Register handlers
     from .handlers import get_routers

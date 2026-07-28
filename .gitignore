@@ -34,4 +34,4 @@ data/uploads/
 logs/
 
 # Optional: if you don't want to use Git LFS, uncomment the line below to ignore the 200MB .accdb file
-*.accdb
+# *.accdb

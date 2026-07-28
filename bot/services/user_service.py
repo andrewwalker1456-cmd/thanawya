@@ -1,7 +1,7 @@
 import sqlite3
 import os
 from datetime import datetime
-from typing import List, Dict, Any, Tuple
+from typing import List, Dict, Any, Tuple, Optional
 import logging
 
 logger = logging.getLogger(__name__)

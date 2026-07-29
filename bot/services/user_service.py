@@ -11,6 +11,11 @@ DB_PATH = "data/bot_state.db"
 DATABASE_URL = os.environ.get("DATABASE_URL")
 PLACEHOLDER = "%s" if DATABASE_URL else "?"
 
+if DATABASE_URL:
+    logger.info("DATABASE_URL is SET — will use Supabase PostgreSQL for user storage.")
+else:
+    logger.warning("DATABASE_URL is NOT SET — falling back to local SQLite (data will be lost on redeploy!).")
+
 def get_connection():
     if DATABASE_URL:
         return psycopg2.connect(DATABASE_URL)
@@ -88,8 +93,10 @@ def register_user(user_id: int, username: str = None, first_name: str = None, la
         """
         cur.execute(query.replace("?", PLACEHOLDER), (user_id, username, first_name, last_name))
         conn.commit()
+        db_type = "PostgreSQL" if DATABASE_URL else "SQLite"
+        logger.info(f"User saved to {db_type}: id={user_id}, name={first_name} {last_name}, username=@{username}")
     except Exception as e:
-        logger.error(f"Failed to register user {user_id}: {e}")
+        logger.error(f"Failed to register user {user_id}: {e}", exc_info=True)
     finally:
         conn.close()
 

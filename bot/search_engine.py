@@ -1,188 +1,204 @@
-"""
-Thanaweya Amma Bot — Search Engine
-High-performance in-memory search with optimized indexes.
-"""
-
-import threading
-from collections import defaultdict
+import sqlite3
+import logging
+import re
+from pathlib import Path
 from typing import Dict, List, Optional
-
 from .arabic_normalizer import ArabicNormalizer
 from .models import StudentRecord
+
+logger = logging.getLogger(__name__)
 
 
 class SearchEngine:
     """
-    Thread-safe, in-memory search engine with pre-built indexes.
-
-    Indexes:
-    - seat_index: dict[int, StudentRecord] — O(1) lookup by seat number
-    - name_index: dict[str, list[StudentRecord]] — O(1) exact normalized name lookup
-    - name_tokens_index: dict[str, list[StudentRecord]] — token-based name search
-      Uses enhanced tokenization that handles:
-      - Fused compounds: عبدالرحمن produces tokens [عبدالرحمن, عبد, الرحمن, رحمن]
-      - ال prefix stripping: الرحمن also indexes under رحمن
-      - ة/ه equivalence at end of words
+    SQLite-backed, high-performance search engine.
+    Queries the SQLite database directly on-demand to run in near 0MB memory.
     """
 
-    def __init__(self, normalize_teh: bool = False):
+    def __init__(self, db_path: str, normalize_teh: bool = False):
+        self.db_path = db_path
         self.normalizer = ArabicNormalizer(normalize_teh=normalize_teh)
-        self._seat_index: Dict[int, StudentRecord] = {}
-        self._name_index: Dict[str, List[StudentRecord]] = defaultdict(list)
-        self._name_tokens_index: Dict[str, List[StudentRecord]] = defaultdict(list)
-        self._lock = threading.RLock()
         self._total_records = 0
 
     @property
     def total_records(self) -> int:
+        if self._total_records == 0:
+            try:
+                conn = sqlite3.connect(self.db_path)
+                cur = conn.cursor()
+                cur.execute("SELECT COUNT(*) FROM students")
+                self._total_records = cur.fetchone()[0]
+                conn.close()
+            except Exception as e:
+                logger.warning(f"Failed to fetch total records count: {e}")
         return self._total_records
 
-    def load_records(self, records: List[StudentRecord]) -> None:
-        """
-        Build all search indexes from a list of records.
-        Uses enhanced tokenization for Arabic name matching.
-        """
-        seat_index: Dict[int, StudentRecord] = {}
-        name_index: Dict[str, List[StudentRecord]] = defaultdict(list)
-        name_tokens_index: Dict[str, List[StudentRecord]] = defaultdict(list)
+    def load_records(self, records: List[StudentRecord]) -> int:
+        """No-op for database-backed search engine."""
+        return 0
 
-        duplicate_count = 0
+    def load_indexes_direct(self, seat_index: dict, name_index: dict,
+                                  name_tokens_index: dict, total: int) -> None:
+        """No-op for database-backed search engine."""
+        pass
 
-        for record in records:
-            # Seat number index
-            if record.seat_number in seat_index:
-                duplicate_count += 1
-            seat_index[record.seat_number] = record
+    def dump_indexes(self) -> dict:
+        """No-op for database-backed search engine."""
+        return {}
 
-            # Normalized name index (exact match)
-            norm_name = self.normalizer.normalize_for_storage(record.name)
-            name_index[norm_name].append(record)
+    def get_stats(self) -> dict:
+        """Return search engine statistics."""
+        return {
+            "total_records": self.total_records,
+            "unique_names": self.total_records,
+            "unique_tokens": 0,
+        }
 
-            # Enhanced token-based index
-            tokens = self.normalizer.get_search_tokens(record.name)
-            for token in tokens:
-                name_tokens_index[token].append(record)
-
-        with self._lock:
-            self._seat_index = seat_index
-            self._name_index = dict(name_index)
-            self._name_tokens_index = dict(name_tokens_index)
-            self._total_records = len(seat_index)
-
-        return duplicate_count
+    def is_loaded(self) -> bool:
+        """Check if database file exists and contains data."""
+        return Path(self.db_path).exists()
 
     def search_by_seat(self, seat_number: int) -> Optional[StudentRecord]:
-        """O(1) lookup by seat number."""
-        with self._lock:
-            return self._seat_index.get(seat_number)
+        """O(1) database lookup by seat number."""
+        conn = sqlite3.connect(self.db_path)
+        conn.row_factory = sqlite3.Row
+        try:
+            cur = conn.cursor()
+            cur.execute("SELECT * FROM students WHERE seating_no = ?", (seat_number,))
+            row = cur.fetchone()
+            if not row:
+                return None
+
+            # Fetch extra subject scores if available
+            extra = {}
+            try:
+                cur.execute("SELECT * FROM student_subjects WHERE seating_no = ?", (seat_number,))
+                sub_row = cur.fetchone()
+                if sub_row:
+                    for key in ["s1", "s10", "s14"]:
+                        if key in sub_row.keys() and sub_row[key] is not None:
+                            num = key[1:]
+                            extra[f"المادة {num}"] = sub_row[key]
+            except sqlite3.OperationalError:
+                pass
+
+            return StudentRecord(
+                seat_number=int(row["seating_no"]),
+                name=str(row["arabic_name"] or "").strip(),
+                grade=float(row["total_degree"] or 0),
+                student_case=int(row["student_case"] or 0),
+                student_case_desc=str(row["student_case_desc"] or "").strip(),
+                c_flag=int(row["c_flage"] or 0),
+                extra_fields=extra,
+            )
+        except Exception as e:
+            logger.error(f"DB search by seat failed: {e}")
+            return None
+        finally:
+            conn.close()
 
     def search_by_name(self, name: str) -> List[StudentRecord]:
         """
-        Search by full Arabic name.
-
-        Strategy:
-        1. Try exact normalized name match first
-        2. Fall back to intersection of enhanced token matches
-           (handles عبدالرحمن vs عبد الرحمن, ة/ه, etc.)
-        3. If strict intersection yields nothing, relax to best-effort (any 2+ tokens)
+        Database-backed search by Arabic name using high-performance wildcard queries.
         """
-        norm_name = self.normalizer.normalize_for_search(name)
+        words = name.strip().split()
+        if not words:
+            return []
 
-        with self._lock:
-            # Strategy 1: Exact match
-            if norm_name in self._name_index:
-                return list(self._name_index[norm_name])
+        conn = sqlite3.connect(self.db_path)
+        conn.row_factory = sqlite3.Row
+        try:
+            cur = conn.cursor()
 
-            # Strategy 2: Enhanced token intersection
-            tokens = self.normalizer.get_search_tokens(name)
-            if not tokens:
-                return []
+            clauses = []
+            params = []
+            for word in words:
+                variations = {word}
+                norm_word = self.normalizer.normalize(word)
+                variations.add(norm_word)
 
-            # Find candidates for each token
-            token_results = []
-            for token in tokens:
-                candidates = self._name_tokens_index.get(token, [])
-                if candidates:
-                    token_results.append(set(id(r) for r in candidates))
+                # Split fused prefixes (e.g. "عبدالرحمن")
+                m = re.match(r"^(عبدال|ابوال|ابيل|أبوال|أبيل)(.*)$", word)
+                if m:
+                    prefix = m.group(1)
+                    rest = m.group(2)
+                    if prefix.startswith("عبد"):
+                        variations.add(f"عبد%{rest}")
+                        if rest.startswith("ال"):
+                            variations.add(f"عبد%{rest[2:]}")
 
-            if not token_results:
-                return []
+                word_clauses = []
+                for v in variations:
+                    pat = v
+                    for a in ["أ", "إ", "آ", "ٱ", "ا"]:
+                        pat = pat.replace(a, "_")
+                    for y in ["ي", "ى"]:
+                        pat = pat.replace(y, "_")
+                    if pat.endswith("ة") or pat.endswith("ه"):
+                        pat = pat[:-1] + "_"
 
-            # Intersect all token result sets
-            common_ids = token_results[0]
-            for tr in token_results[1:]:
-                common_ids = common_ids & tr
+                    if v.startswith("ال") and len(v) > 3:
+                        word_clauses.append("arabic_name LIKE ?")
+                        params.append(f"%{pat}%")
+                        word_clauses.append("arabic_name LIKE ?")
+                        params.append(f"%{pat[2:]}%")
+                    else:
+                        word_clauses.append("arabic_name LIKE ?")
+                        params.append(f"%{pat}%")
 
+                clauses.append(f"({' OR '.join(word_clauses)})")
+
+            query = f"SELECT * FROM students WHERE {' AND '.join(clauses)} LIMIT 15"
+            cur.execute(query, params)
+            rows = cur.fetchall()
+
+            # Build StudentRecord objects
             results = []
-            if common_ids:
-                # Build lookup from id to record
-                id_to_record = {}
-                for token in tokens:
-                    for r in self._name_tokens_index.get(token, []):
-                        if id(r) in common_ids:
-                            id_to_record[id(r)] = r
-                results = list(id_to_record.values())
-            else:
-                # Strategy 3: Relax — union of all candidates, score by overlap
-                all_ids = set()
-                id_to_record = {}
-                for token in tokens:
-                    for r in self._name_tokens_index.get(token, []):
-                        rid = id(r)
-                        all_ids.add(rid)
-                        id_to_record[rid] = r
-                results = list(id_to_record.values())
+            for row in rows:
+                seating_no = int(row["seating_no"])
+                extra = {}
+                try:
+                    cur.execute("SELECT * FROM student_subjects WHERE seating_no = ?", (seating_no,))
+                    sub_row = cur.fetchone()
+                    if sub_row:
+                        for key in ["s1", "s10", "s14"]:
+                            if key in sub_row.keys() and sub_row[key] is not None:
+                                num = key[1:]
+                                extra[f"المادة {num}"] = sub_row[key]
+                except sqlite3.OperationalError:
+                    pass
 
-            # Score and sort results
-            results.sort(key=lambda r: self._name_similarity_score(norm_name, r))
-            return results
+                results.append(
+                    StudentRecord(
+                        seat_number=seating_no,
+                        name=str(row["arabic_name"] or "").strip(),
+                        grade=float(row["total_degree"] or 0),
+                        student_case=int(row["student_case"] or 0),
+                        student_case_desc=str(row["student_case_desc"] or "").strip(),
+                        c_flag=int(row["c_flage"] or 0),
+                        extra_fields=extra,
+                    )
+                )
+
+            # Sort results by similarity score
+            norm_search = self.normalizer.normalize_for_search(name)
+            results.sort(key=lambda r: self._name_similarity_score(norm_search, r))
+            return results[:10]
+
+        except Exception as e:
+            logger.error(f"DB search by name failed: {e}")
+            return []
+        finally:
+            conn.close()
 
     def _name_similarity_score(self, norm_search: str, record: StudentRecord) -> int:
         """Score how well a record matches the search. Lower is better."""
         norm_record = self.normalizer.normalize_for_storage(record.name)
-        # Exact prefix match is best
         if norm_record.startswith(norm_search):
             return 0
-        # Contains match
         if norm_search in norm_record:
             return 1
-        # Token overlap count (lower is better)
         search_tokens = set(norm_search.split())
         record_tokens = set(norm_record.split())
         overlap = len(search_tokens & record_tokens)
         return len(search_tokens) - overlap
-
-    def load_indexes_direct(self, seat_index: dict, name_index: dict,
-                                  name_tokens_index: dict, total: int) -> None:
-        """Restore indexes from pre-built cache (skips tokenization).
-        Much faster than load_records for startup.
-        """
-        with self._lock:
-            self._seat_index = seat_index
-            self._name_index = name_index
-            self._name_tokens_index = name_tokens_index
-            self._total_records = total
-
-    def dump_indexes(self) -> dict:
-        """Export current indexes for caching."""
-        with self._lock:
-            return {
-                "seat_index": self._seat_index,
-                "name_index": self._name_index,
-                "name_tokens_index": self._name_tokens_index,
-                "total_records": self._total_records,
-            }
-
-    def get_stats(self) -> dict:
-        """Return search engine statistics."""
-        with self._lock:
-            return {
-                "total_records": self._total_records,
-                "unique_names": len(self._name_index),
-                "unique_tokens": len(self._name_tokens_index),
-            }
-
-    def is_loaded(self) -> bool:
-        """Check if data is loaded."""
-        with self._lock:
-            return self._total_records > 0

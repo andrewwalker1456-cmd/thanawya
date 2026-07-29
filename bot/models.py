@@ -7,17 +7,35 @@ from dataclasses import dataclass, field, asdict
 from typing import Any, Dict, List, Optional
 
 
-@dataclass
 class StudentRecord:
-    """Represents a single student record from the Excel file."""
-    seat_number: int
-    name: str
-    grade: float
-    student_case: int
-    student_case_desc: str
-    c_flag: int
-    # Allow additional dynamic columns
-    extra_fields: Dict[str, Any] = field(default_factory=dict)
+    """Represents a single student record. Optimized with slots for minimal memory footprint."""
+    __slots__ = (
+        "seat_number",
+        "name",
+        "grade",
+        "student_case",
+        "student_case_desc",
+        "c_flag",
+        "extra_fields",
+    )
+
+    def __init__(
+        self,
+        seat_number: int,
+        name: str,
+        grade: float,
+        student_case: int,
+        student_case_desc: str,
+        c_flag: int,
+        extra_fields: Dict[str, Any] = None,
+    ):
+        self.seat_number = seat_number
+        self.name = name
+        self.grade = grade
+        self.student_case = student_case
+        self.student_case_desc = student_case_desc
+        self.c_flag = c_flag
+        self.extra_fields = extra_fields if extra_fields is not None else {}
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for PDF generation."""

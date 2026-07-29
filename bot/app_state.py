@@ -32,8 +32,13 @@ def get_search_engine():
     global _search_engine
     if _search_engine is None:
         from .search_engine import SearchEngine
+        from pathlib import Path
         cfg = get_config()
-        _search_engine = SearchEngine(normalize_teh=cfg.search.normalize_teh)
+        db_path = Path(cfg.base_dir).parent / cfg.data.source_file
+        _search_engine = SearchEngine(
+            db_path=str(db_path),
+            normalize_teh=cfg.search.normalize_teh
+        )
     return _search_engine
 
 

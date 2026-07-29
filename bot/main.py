@@ -8,6 +8,7 @@ import logging
 import os
 import sys
 import signal
+import sqlite3
 from pathlib import Path
 from logging.handlers import RotatingFileHandler
 
@@ -69,6 +70,19 @@ async def initial_import(config: AppConfig) -> None:
         if not source_path.exists():
             source_path = Path(config.base_dir).parent / source
         if source_path.exists():
+            if source_path.suffix == ".db":
+                logger.info(f"Using SQLite database directly: {source_path}")
+                try:
+                    conn = sqlite3.connect(str(source_path))
+                    cur = conn.cursor()
+                    cur.execute("SELECT COUNT(*) FROM students")
+                    count = cur.fetchone()[0]
+                    conn.close()
+                    logger.info(f"SQLite database is ready on-demand with {count:,} records.")
+                    return
+                except Exception as e:
+                    logger.warning(f"Could not verify existing SQLite DB: {e}, will attempt import")
+            
             logger.info(f"Importing from source file: {source_path}")
             try:
                 _, stats = importer.import_file(source_path)

@@ -148,7 +148,7 @@ class SearchEngine:
 
                 clauses.append(f"({' OR '.join(word_clauses)})")
 
-            query = f"SELECT * FROM students WHERE {' AND '.join(clauses)} LIMIT 15"
+            query = f"SELECT * FROM students WHERE {' AND '.join(clauses)} LIMIT 100"
             cur.execute(query, params)
             rows = cur.fetchall()
 
@@ -183,7 +183,7 @@ class SearchEngine:
             # Sort results by similarity score
             norm_search = self.normalizer.normalize_for_search(name)
             results.sort(key=lambda r: self._name_similarity_score(norm_search, r))
-            return results[:10]
+            return results
 
         except Exception as e:
             logger.error(f"DB search by name failed: {e}")

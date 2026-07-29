@@ -22,3 +22,5 @@ services:
         value: "1"
       - key: PORT
         value: "8080"
+      - key: DATABASE_URL
+        value: "postgresql://postgres.ulnktgszpjrqyipbmbzm:Premiumservice2026@aws-1-us-west-1.pooler.supabase.com:5432/postgres?sslmode=require"

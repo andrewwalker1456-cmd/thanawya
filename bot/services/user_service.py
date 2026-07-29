@@ -33,6 +33,7 @@ def init_db():
     try:
         cur = conn.cursor()
         if DATABASE_URL:
+            logger.info("Connecting to Supabase PostgreSQL database...")
             # PostgreSQL: user_id must be BIGINT to handle large Telegram IDs
             cur.execute("""
                 CREATE TABLE IF NOT EXISTS users (
@@ -46,6 +47,7 @@ def init_db():
                 )
             """)
         else:
+            logger.info("Connecting to local SQLite database (DATABASE_URL not set)...")
             # SQLite
             cur.execute("""
                 CREATE TABLE IF NOT EXISTS users (

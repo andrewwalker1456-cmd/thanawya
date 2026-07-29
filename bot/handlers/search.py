@@ -13,6 +13,7 @@ from aiogram.types import (
     InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery, BufferedInputFile
 )
 from aiogram.fsm.context import FSMContext
+from aiogram.exceptions import TelegramBadRequest
 
 from ..app_state import (
     get_config, get_search_engine, get_pdf_generator, get_stats_service,
@@ -223,11 +224,15 @@ async def on_name_page_callback(callback: CallbackQuery, state: FSMContext) -> N
     for i, r in enumerate(page_results, start_idx + 1):
         msg += f"<b>{i}.</b> {r['name']} — رقم الجلوس: <code>{r['seat']}</code>\n"
         
-    await callback.message.edit_text(
-        text=msg,
-        reply_markup=_get_search_pagination_keyboard(results, target_page, total_pages),
-        parse_mode="HTML"
-    )
+    try:
+        await callback.message.edit_text(
+            text=msg,
+            reply_markup=_get_search_pagination_keyboard(results, target_page, total_pages),
+            parse_mode="HTML"
+        )
+    except TelegramBadRequest as e:
+        if "message is not modified" not in str(e):
+            logger.error(f"Error editing pagination message: {e}")
     await callback.answer()
 
 

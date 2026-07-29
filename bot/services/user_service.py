@@ -40,20 +40,7 @@ def init_db():
         if DATABASE_URL:
             logger.info("Connecting to Supabase PostgreSQL database...")
             
-            # Drop the old broken table that's missing columns and recreate properly
-            # First check if table exists but is missing critical columns
-            cur.execute("""
-                SELECT column_name FROM information_schema.columns 
-                WHERE table_name = 'users' AND table_schema = 'public'
-            """)
-            existing_columns = {row[0] for row in cur.fetchall()}
-            
-            if existing_columns and 'username' not in existing_columns:
-                # Old broken table — drop it and start fresh
-                logger.warning("Dropping old users table (missing columns) and recreating...")
-                cur.execute("DROP TABLE IF EXISTS users")
-            
-            # Create the full table
+            # Create the table if it doesn't exist
             cur.execute("""
                 CREATE TABLE IF NOT EXISTS users (
                     user_id BIGINT PRIMARY KEY,
@@ -66,7 +53,7 @@ def init_db():
                 )
             """)
             
-            # Future-proof migrations: add any missing columns
+            # Run migration to add columns if they were missing in the existing table
             for col, col_type, default in [
                 ('username', 'TEXT', None),
                 ('first_name', 'TEXT', None),
@@ -78,8 +65,8 @@ def init_db():
                 try:
                     default_clause = f" DEFAULT {default}" if default else ""
                     cur.execute(f"ALTER TABLE users ADD COLUMN IF NOT EXISTS {col} {col_type}{default_clause}")
-                except Exception:
-                    pass
+                except Exception as alter_err:
+                    logger.warning(f"Could not add column {col}: {alter_err}")
                     
         else:
             logger.info("Connecting to local SQLite database (DATABASE_URL not set)...")
